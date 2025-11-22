@@ -1,8 +1,8 @@
 package domain
 
 type User struct {
-	UserID   string
-	Username string
-	TeamName string // связь с командой
-	IsActive bool   // можно ли назначить ревьювером
+	UserID   string `json:"user_id"`
+	Username string `json:"username"`
+	TeamName string `json:"team_name"`
+	IsActive bool   `json:"is_active"`
 }
