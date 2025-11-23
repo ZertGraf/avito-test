@@ -1,6 +1,5 @@
 -- 001_init.sql
 
--- Write your migrate up statements here
 CREATE TABLE teams (
                        team_name VARCHAR(255) PRIMARY KEY,
                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

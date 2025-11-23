@@ -21,7 +21,7 @@ func NewTeamRepo(db *pgxpool.Pool, logger *logger.Logger) *Team {
 	}
 }
 
-// TeamExists проверяет существование команды
+// TeamExists checks if a team with the given name already exists.
 func (r *Team) TeamExists(ctx context.Context, teamName string) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM teams WHERE team_name = $1)`
@@ -34,7 +34,8 @@ func (r *Team) TeamExists(ctx context.Context, teamName string) (bool, error) {
 	return exists, nil
 }
 
-// CreateTeamWithMembers создает команду и участников в одной транзакции
+// CreateTeamWithMembers creates a team and all its members atomically.
+// Uses upsert for members to handle concurrent insertions.
 func (r *Team) CreateTeamWithMembers(ctx context.Context, team *domain.Team) (*domain.Team, error) {
 	err := r.withTx(ctx, func(tx pgx.Tx) error {
 		// 1. Создаем команду
@@ -46,7 +47,6 @@ func (r *Team) CreateTeamWithMembers(ctx context.Context, team *domain.Team) (*d
 			return fmt.Errorf("insert team: %w", err)
 		}
 
-		// 2. Upsert участников
 		for _, member := range team.Members {
 			_, err := tx.Exec(ctx, `
 				INSERT INTO users (user_id, username, team_name, is_active, created_at)
@@ -77,9 +77,9 @@ func (r *Team) CreateTeamWithMembers(ctx context.Context, team *domain.Team) (*d
 	return team, nil
 }
 
-// GetTeamWithMembers получает команду со всеми участниками
+// GetTeamWithMembers retrieves a team and all its members.
+// Returns ErrTeamNotFound if team doesn't exist.
 func (r *Team) GetTeamWithMembers(ctx context.Context, teamName string) (*domain.Team, error) {
-	// Используем LEFT JOIN на случай если команда пустая
 	query := `
         SELECT 
             t.team_name,
@@ -118,7 +118,6 @@ func (r *Team) GetTeamWithMembers(ctx context.Context, teamName string) (*domain
 			}
 		}
 
-		// Пропускаем пустые записи (когда у команды нет участников)
 		if userID != "" {
 			team.Members = append(team.Members, domain.TeamMember{
 				UserID:   userID,
@@ -139,7 +138,8 @@ func (r *Team) GetTeamWithMembers(ctx context.Context, teamName string) (*domain
 	return team, nil
 }
 
-// withTx выполняет функцию в транзакции
+// withTx executes a function within a database transaction.
+// Automatically handles commit/rollback based on error status.
 func (r *Team) withTx(ctx context.Context, fn func(pgx.Tx) error) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {

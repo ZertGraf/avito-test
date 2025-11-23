@@ -26,6 +26,8 @@ type CreateTeamResponse struct {
 	Team *domain.Team `json:"team"`
 }
 
+// CreateTeam creates a new team with initial members.
+// Validates team structure before persistence.
 func (s *TeamService) CreateTeam(ctx context.Context, team *domain.Team) (*CreateTeamResponse, error) {
 	if err := s.validateTeam(team); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
@@ -53,6 +55,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, team *domain.Team) (*Creat
 	return &CreateTeamResponse{Team: created}, nil
 }
 
+// GetTeam retrieves a team with all its members.
 func (s *TeamService) GetTeam(ctx context.Context, teamName string) (*domain.Team, error) {
 	team, err := s.repo.GetTeamWithMembers(ctx, teamName)
 	if err != nil {
@@ -67,6 +70,7 @@ func (s *TeamService) GetTeam(ctx context.Context, teamName string) (*domain.Tea
 	return team, nil
 }
 
+// validateTeam validates team structure and member data.
 func (s *TeamService) validateTeam(team *domain.Team) error {
 	if team == nil {
 		return errors.New("team is nil")
@@ -79,12 +83,13 @@ func (s *TeamService) validateTeam(team *domain.Team) error {
 		),
 		Field(&team.Members,
 			Required,
-			Length(1, 0),
+			Length(1, 0), // At least one member required
 			Each(By(s.validateMember)),
 		),
 	)
 }
 
+// validateMember validates individual team member data.
 func (s *TeamService) validateMember(value interface{}) error {
 	member, ok := value.(domain.TeamMember)
 	if !ok {

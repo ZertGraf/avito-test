@@ -18,17 +18,14 @@ type Application struct {
 	Postgres *postgres.Connection
 	Migrator *postgres.Migrator
 
-	// Repositories - используем интерфейсы, не конкретные типы
 	TeamRepo repository.TeamRepository
 	UserRepo repository.UserRepository
 	PRRepo   repository.PRRepository
 
-	// Services - правильные названия
 	TeamService *service.TeamService
 	UserService *service.UserService
 	PRService   *service.PRService
 
-	// Handlers
 	TeamHandler *handler.TeamHandler
 	UserHandler *handler.UserHandler
 	PRHandler   *handler.PRHandler
@@ -81,39 +78,32 @@ func New() (*Application, error) {
 func (app *Application) Init(ctx context.Context) error {
 	app.Logger.Info("initializing application")
 
-	// Connect to postgres
 	if err := app.Postgres.Connect(ctx); err != nil {
 		return fmt.Errorf("postgres connection failed: %w", err)
 	}
 
-	// Setup migrator
 	app.Migrator = postgres.NewMigrator(app.Postgres.Pool(), &postgres.MigrationConfig{
 		Timeout:   app.Config.DatabaseMigrationTimeout,
 		TableName: app.Config.DatabaseMigrationTable,
 		Enabled:   app.Config.DatabaseMigrationEnabled,
 	}, app.Logger)
 
-	// Run migrations
 	if err := app.Migrator.RunMigrations(ctx); err != nil {
 		return fmt.Errorf("database migrations failed: %w", err)
 	}
 
-	// Repositories - правильные имена типов
 	app.TeamRepo = repository.NewTeamRepo(app.Postgres.Pool(), app.Logger)
 	app.UserRepo = repository.NewUserRepo(app.Postgres.Pool(), app.Logger)
 	app.PRRepo = repository.NewPRRepo(app.Postgres.Pool(), app.Logger)
 
-	// Services - правильные имена
 	app.TeamService = service.NewTeamService(app.TeamRepo, app.Logger)
 	app.UserService = service.NewUserService(app.UserRepo, app.Logger)
 	app.PRService = service.NewPRService(app.PRRepo, app.UserRepo, app.Logger)
 
-	// Handlers
 	app.TeamHandler = handler.NewTeamHandler(app.TeamService, app.Logger)
 	app.UserHandler = handler.NewUserHandler(app.UserService, app.PRService, app.Logger)
 	app.PRHandler = handler.NewPRHandler(app.PRService, app.Logger)
 
-	// HTTP Server
 	serverConfig := &api.ServerConfig{
 		Host:         app.Config.ServerHost,
 		Port:         app.Config.ServerPort,
@@ -130,7 +120,6 @@ func (app *Application) Init(ctx context.Context) error {
 		app.Logger,
 	)
 
-	// Start HTTP server
 	if err := app.HTTPServer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start http server: %w", err)
 	}

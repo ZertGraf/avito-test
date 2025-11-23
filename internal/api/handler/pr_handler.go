@@ -32,7 +32,6 @@ func (h *PRHandler) Routes() http.Handler {
 	return r
 }
 
-// POST /pullRequest/create
 type CreatePRRequest struct {
 	PullRequestID   string `json:"pull_request_id"`
 	PullRequestName string `json:"pull_request_name"`
@@ -72,7 +71,6 @@ func (h *PRHandler) CreatePR(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /pullRequest/merge
 type MergePRRequest struct {
 	PullRequestID string `json:"pull_request_id"`
 }
@@ -110,7 +108,6 @@ func (h *PRHandler) MergePR(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /pullRequest/reassign
 type ReassignRequest struct {
 	PullRequestID string `json:"pull_request_id"`
 	OldUserID     string `json:"old_user_id"`

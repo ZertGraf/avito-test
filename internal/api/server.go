@@ -53,7 +53,6 @@ func (s *HTTPServer) Start(_ context.Context) error {
 	s.logger.Info("starting http servers",
 		"public_addr", s.server.Addr)
 
-	// start public server
 	go func() {
 		s.logger.Info("public server listening", "addr", s.server.Addr)
 		if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -90,7 +89,6 @@ func setupRouter(
 	r.Use(middleware.Security())
 	r.Use(middleware.Timeout(30 * time.Second))
 
-	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

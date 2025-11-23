@@ -35,6 +35,7 @@ func NewPRService(
 	}
 }
 
+// GetReviewsByUser retrieves all pull requests assigned to a specific reviewer.
 func (s *PRService) GetReviewsByUser(ctx context.Context, userID string) ([]*domain.PullRequestShort, error) {
 	prs, err := s.prRepo.GetByReviewer(ctx, userID)
 	if err != nil {
@@ -49,6 +50,7 @@ func (s *PRService) GetReviewsByUser(ctx context.Context, userID string) ([]*dom
 	return prs, nil
 }
 
+// CreatePR creates a new pull request and automatically assigns reviewers from author's team.
 func (s *PRService) CreatePR(ctx context.Context, prID, prName, authorID string) (*domain.PullRequest, error) {
 	exists, err := s.prRepo.Exists(ctx, prID)
 	if err != nil {
@@ -68,6 +70,7 @@ func (s *PRService) CreatePR(ctx context.Context, prID, prName, authorID string)
 		return nil, fmt.Errorf("get team members: %w", err)
 	}
 
+	// Randomly select up to 2 reviewers
 	reviewers := s.selectReviewers(candidates, 2)
 
 	pr := &domain.PullRequest{
@@ -96,6 +99,8 @@ func (s *PRService) CreatePR(ctx context.Context, prID, prName, authorID string)
 	return created, nil
 }
 
+// selectReviewers randomly selects reviewers from a pool of candidates.
+// Uses Fisher-Yates shuffle for uniform distribution.
 func (s *PRService) selectReviewers(candidates []*domain.User, maxCount int) []string {
 	if len(candidates) == 0 {
 		return []string{}
@@ -103,14 +108,18 @@ func (s *PRService) selectReviewers(candidates []*domain.User, maxCount int) []s
 
 	count := min(maxCount, len(candidates))
 
+	// Create a copy to avoid modifying the original slice
 	shuffled := make([]*domain.User, len(candidates))
 	copy(shuffled, candidates)
+
+	// Thread-safe shuffle
 	s.mu.Lock()
 	s.random.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
 	s.mu.Unlock()
 
+	// Extract IDs from shuffled candidates
 	reviewers := make([]string, count)
 	for i := 0; i < count; i++ {
 		reviewers[i] = shuffled[i].UserID
@@ -119,13 +128,13 @@ func (s *PRService) selectReviewers(candidates []*domain.User, maxCount int) []s
 	return reviewers
 }
 
+// MergePR marks a pull request as merged. Idempotent operation.
 func (s *PRService) MergePR(ctx context.Context, prID string) (*domain.PullRequest, error) {
 	pr, err := s.prRepo.GetByID(ctx, prID)
 	if err != nil {
 		return nil, fmt.Errorf("get pr: %w", err)
 	}
 
-	// idempotency: if already merged, return current state without error
 	if pr.Status == domain.PRStatusMerged {
 		s.logger.Info("pr already merged, returning current state",
 			"pr_id", prID,
@@ -152,6 +161,8 @@ func (s *PRService) MergePR(ctx context.Context, prID string) (*domain.PullReque
 	return merged, nil
 }
 
+// ReassignReviewer replaces an assigned reviewer with a new random team member.
+// Returns the updated PR and new reviewer ID.
 func (s *PRService) ReassignReviewer(ctx context.Context, prID, oldUserID string) (*domain.PullRequest, string, error) {
 	pr, err := s.prRepo.GetByID(ctx, prID)
 	if err != nil {
@@ -171,20 +182,20 @@ func (s *PRService) ReassignReviewer(ctx context.Context, prID, oldUserID string
 		return nil, "", fmt.Errorf("get old reviewer: %w", err)
 	}
 
-	// critical: get candidates from OLD REVIEWER's team, not author's team
+	// Get all active team members
 	candidates, err := s.userRepo.GetActiveTeamMembers(ctx, oldUser.TeamName, "")
 	if err != nil {
 		return nil, "", fmt.Errorf("get team members: %w", err)
 	}
 
-	// build exclusion list: author + old reviewer + current reviewers
+	// Build exclusion list: author + current reviewers
 	excluded := make(map[string]bool)
 	excluded[pr.AuthorID] = true
 	for _, reviewerID := range pr.AssignedReviewers {
 		excluded[reviewerID] = true
 	}
 
-	// filter eligible candidates
+	// Filter eligible candidates
 	eligible := make([]*domain.User, 0)
 	for _, candidate := range candidates {
 		if !excluded[candidate.UserID] {
@@ -196,12 +207,14 @@ func (s *PRService) ReassignReviewer(ctx context.Context, prID, oldUserID string
 		return nil, "", domain.ErrNoCandidate
 	}
 
+	// Select random replacement reviewer
 	s.mu.Lock()
-	// select random replacement
 	newReviewer := eligible[s.random.Intn(len(eligible))]
 	s.mu.Unlock()
 
+	// Atomically replace reviewer in database
 	if err := s.prRepo.ReplaceReviewer(ctx, prID, oldUserID, newReviewer.UserID); err != nil {
+		// Handle concurrent merge scenario
 		if errors.Is(err, domain.ErrNotAssigned) {
 			checkPR, checkErr := s.prRepo.GetByID(ctx, prID)
 			if checkErr == nil && checkPR.Status == domain.PRStatusMerged {
@@ -227,6 +240,7 @@ func (s *PRService) ReassignReviewer(ctx context.Context, prID, oldUserID string
 	return updated, newReviewer.UserID, nil
 }
 
+// isAssigned checks if a user is in the reviewers list.
 func (s *PRService) isAssigned(reviewers []string, userID string) bool {
 	for _, id := range reviewers {
 		if id == userID {

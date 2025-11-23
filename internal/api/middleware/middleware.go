@@ -1,9 +1,7 @@
 package middleware
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/ZertGraf/avito-test/internal/api/handler"
 	"github.com/ZertGraf/avito-test/internal/pkg/logger"
 	"net/http"
@@ -82,18 +80,4 @@ func Recovery(logger *logger.Logger) func(next http.Handler) http.Handler {
 // Timeout adds request timeout
 func Timeout(timeout time.Duration) func(next http.Handler) http.Handler {
 	return middleware.Timeout(timeout)
-}
-
-func RequestID(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := r.Header.Get("X-Request-ID")
-		if requestID == "" {
-			requestID = fmt.Sprintf("%d", time.Now().UnixNano())
-		}
-
-		ctx := context.WithValue(r.Context(), "request_id", requestID)
-		w.Header().Set("X-Request-ID", requestID)
-
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
 }

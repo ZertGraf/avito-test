@@ -20,7 +20,6 @@ const (
 	CodeNotFound    ErrorCode = "NOT_FOUND"
 )
 
-// ErrorResponse - структура из спецификации
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
@@ -30,7 +29,6 @@ type ErrorDetail struct {
 	Message string    `json:"message"`
 }
 
-// WriteError - единая точка для отправки ошибок клиенту
 func WriteError(w http.ResponseWriter, err error, logger *logger.Logger) {
 	status, response := mapError(err)
 
@@ -40,7 +38,6 @@ func WriteError(w http.ResponseWriter, err error, logger *logger.Logger) {
 			"code", response.Error.Code,
 		)
 	} else {
-		// Неожиданные ошибки - это проблема (error)
 		logger.Error("unexpected error",
 			"error", err.Error(),
 		)
@@ -51,7 +48,6 @@ func WriteError(w http.ResponseWriter, err error, logger *logger.Logger) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// mapError - мапим доменные ошибки на HTTP
 func mapError(err error) (int, ErrorResponse) {
 	switch {
 	case errors.Is(err, domain.ErrTeamExists):
@@ -105,7 +101,6 @@ func mapError(err error) (int, ErrorResponse) {
 		}
 
 	default:
-		// Любая другая ошибка - 500
 		return http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    "INTERNAL_ERROR",

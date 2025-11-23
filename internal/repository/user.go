@@ -22,6 +22,7 @@ func NewUserRepo(db *pgxpool.Pool, logger *logger.Logger) *UserRepo {
 	}
 }
 
+// SetIsActive updates user's activity status and returns updated user.
 func (r *UserRepo) SetIsActive(ctx context.Context, userID string, isActive bool) (*domain.User, error) {
 	query := `
 		UPDATE users 
@@ -48,6 +49,7 @@ func (r *UserRepo) SetIsActive(ctx context.Context, userID string, isActive bool
 	return &user, nil
 }
 
+// GetByID retrieves a user by their unique identifier.
 func (r *UserRepo) GetByID(ctx context.Context, userID string) (*domain.User, error) {
 	query := `
 		SELECT user_id, username, team_name, is_active
@@ -73,6 +75,8 @@ func (r *UserRepo) GetByID(ctx context.Context, userID string) (*domain.User, er
 	return &user, nil
 }
 
+// GetActiveTeamMembers retrieves all active members of a team.
+// Excludes the specified user (typically the PR author or current reviewer).
 func (r *UserRepo) GetActiveTeamMembers(ctx context.Context, teamName string, excludeUserID string) ([]*domain.User, error) {
 	query := `
 		SELECT user_id, username, team_name, is_active

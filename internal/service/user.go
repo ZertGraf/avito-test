@@ -24,6 +24,8 @@ type SetIsActiveResponse struct {
 	User *domain.User `json:"user"`
 }
 
+// SetIsActive updates user's activity status.
+// Used to enable/disable users from reviewer assignment pool.
 func (s *UserService) SetIsActive(ctx context.Context, userID string, isActive bool) (*domain.User, error) {
 	user, err := s.repo.SetIsActive(ctx, userID, isActive)
 	if err != nil {

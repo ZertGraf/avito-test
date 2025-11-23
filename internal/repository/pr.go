@@ -21,9 +21,11 @@ func NewPRRepo(db *pgxpool.Pool, logger *logger.Logger) *PRRepo {
 	}
 }
 
+// Create persists a new pull request and its assigned reviewers.
+// Uses transaction to ensure atomicity.
 func (r *PRRepo) Create(ctx context.Context, pr *domain.PullRequest) error {
 	return r.withTx(ctx, func(tx pgx.Tx) error {
-		// 1. Создаём PR
+		// Insert PR record
 		_, err := tx.Exec(ctx, `
             INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status)
             VALUES ($1, $2, $3, $4)
@@ -33,7 +35,7 @@ func (r *PRRepo) Create(ctx context.Context, pr *domain.PullRequest) error {
 			return fmt.Errorf("insert pr: %w", err)
 		}
 
-		// 2. Добавляем ревьюверов
+		// Insert reviewer assignments
 		for _, reviewerID := range pr.AssignedReviewers {
 			_, err := tx.Exec(ctx, `
                 INSERT INTO pr_reviewers (pull_request_id, reviewer_id)
@@ -49,8 +51,9 @@ func (r *PRRepo) Create(ctx context.Context, pr *domain.PullRequest) error {
 	})
 }
 
+// GetByID retrieves a pull request with all assigned reviewers.
+// Returns ErrPRNotFound if PR doesn't exist.
 func (r *PRRepo) GetByID(ctx context.Context, prID string) (*domain.PullRequest, error) {
-	// Используем LEFT JOIN для получения ревьюверов
 	query := `
         SELECT 
             pr.pull_request_id,
@@ -75,6 +78,8 @@ func (r *PRRepo) GetByID(ctx context.Context, prID string) (*domain.PullRequest,
 	var pr *domain.PullRequest
 	for rows.Next() {
 		var reviewerID string
+
+		// Initialize PR on first row
 		if pr == nil {
 			pr = &domain.PullRequest{}
 			err = rows.Scan(
@@ -88,6 +93,8 @@ func (r *PRRepo) GetByID(ctx context.Context, prID string) (*domain.PullRequest,
 			)
 		} else {
 			var tmpPR domain.PullRequest
+
+			// Subsequent rows only need reviewer ID
 			err = rows.Scan(
 				&tmpPR.PullRequestID,
 				&tmpPR.PullRequestName,
@@ -103,6 +110,7 @@ func (r *PRRepo) GetByID(ctx context.Context, prID string) (*domain.PullRequest,
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 
+		// Collect reviewer IDs
 		if reviewerID != "" {
 			pr.AssignedReviewers = append(pr.AssignedReviewers, reviewerID)
 		}
@@ -116,6 +124,7 @@ func (r *PRRepo) GetByID(ctx context.Context, prID string) (*domain.PullRequest,
 		return nil, domain.ErrPRNotFound
 	}
 
+	// Ensure non-nil slice for consistency
 	if pr.AssignedReviewers == nil {
 		pr.AssignedReviewers = []string{}
 	}
@@ -123,6 +132,7 @@ func (r *PRRepo) GetByID(ctx context.Context, prID string) (*domain.PullRequest,
 	return pr, nil
 }
 
+// Merge marks a pull request as merged with current timestamp.
 func (r *PRRepo) Merge(ctx context.Context, prID string) error {
 	query := `
         UPDATE pull_requests 
@@ -142,6 +152,8 @@ func (r *PRRepo) Merge(ctx context.Context, prID string) error {
 	return nil
 }
 
+// GetByReviewer retrieves all PRs assigned to a specific reviewer.
+// Returns empty slice if no PRs found.
 func (r *PRRepo) GetByReviewer(ctx context.Context, userID string) ([]*domain.PullRequestShort, error) {
 	query := `
 		SELECT 
@@ -174,6 +186,7 @@ func (r *PRRepo) GetByReviewer(ctx context.Context, userID string) ([]*domain.Pu
 		return nil, fmt.Errorf("iterate rows: %w", err)
 	}
 
+	// Return empty slice instead of nil
 	if prs == nil {
 		prs = []*domain.PullRequestShort{}
 	}
@@ -181,6 +194,8 @@ func (r *PRRepo) GetByReviewer(ctx context.Context, userID string) ([]*domain.Pu
 	return prs, nil
 }
 
+// ReplaceReviewer atomically replaces a reviewer on an open PR.
+// Ensures PR is still open and reviewer is assigned before replacement.
 func (r *PRRepo) ReplaceReviewer(ctx context.Context, prID, oldUserID, newUserID string) error {
 	query := `
         UPDATE pr_reviewers
@@ -197,6 +212,7 @@ func (r *PRRepo) ReplaceReviewer(ctx context.Context, prID, oldUserID, newUserID
 		return fmt.Errorf("replace reviewer: %w", err)
 	}
 
+	// No rows affected means either reviewer not assigned or PR not open
 	if result.RowsAffected() == 0 {
 		return domain.ErrNotAssigned
 	}
@@ -204,6 +220,7 @@ func (r *PRRepo) ReplaceReviewer(ctx context.Context, prID, oldUserID, newUserID
 	return nil
 }
 
+// Exists checks if a pull request exists by ID.
 func (r *PRRepo) Exists(ctx context.Context, prID string) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM pull_requests WHERE pull_request_id = $1)`
@@ -216,6 +233,8 @@ func (r *PRRepo) Exists(ctx context.Context, prID string) (bool, error) {
 	return exists, nil
 }
 
+// withTx executes a function within a database transaction.
+// Automatically handles commit/rollback based on error status.
 func (r *PRRepo) withTx(ctx context.Context, fn func(pgx.Tx) error) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
