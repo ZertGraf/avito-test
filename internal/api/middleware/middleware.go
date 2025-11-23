@@ -63,12 +63,14 @@ func Recovery(logger *logger.Logger) func(next http.Handler) http.Handler {
 
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(handler.ErrorResponse{
+					if err := json.NewEncoder(w).Encode(handler.ErrorResponse{
 						Error: handler.ErrorDetail{
 							Code:    "INTERNAL_ERROR",
 							Message: "internal server error",
 						},
-					})
+					}); err != nil {
+						logger.Warn("failed to write recovered response", "error", err)
+					}
 				}
 			}()
 
