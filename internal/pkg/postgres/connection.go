@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/ZertGraf/avito-test/internal/pkg/logger"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -73,38 +72,4 @@ func (c *Connection) Health(ctx context.Context) error {
 		return fmt.Errorf("postgres pool not initialized")
 	}
 	return c.pool.Ping(ctx)
-}
-
-func (c *Connection) Stats() *pgxpool.Stat {
-	if c.pool == nil {
-		return nil
-	}
-	return c.pool.Stat()
-}
-
-func (c *Connection) WithTransaction(ctx context.Context, fn func(pgx.Tx) error) error {
-	if c.pool == nil {
-		return fmt.Errorf("postgres pool not initialized")
-	}
-
-	tx, err := c.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-
-	defer func() {
-		if err != nil {
-			if err = tx.Rollback(ctx); err != nil {
-				c.logger.Error("failed to rollback transaction: %w", err)
-			}
-		}
-	}()
-
-	if err = fn(tx); err != nil {
-		return err
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-	return nil
 }
