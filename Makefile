@@ -36,11 +36,11 @@ help:
 
 build:
 	@echo Building $(BINARY_NAME)...
-	go build -ldflags="-w -s" -o bin/$(BINARY_NAME).exe ./cmd/server
+	go build -ldflags="-w -s" -o bin/$(BINARY_NAME).exe ./cmd/server/main.go
 
 run:
 	@echo Running $(PROJECT_NAME)...
-	go run ./cmd/server
+	go run ./cmd/server/main.go
 
 clean:
 	@echo Cleaning build artifacts...
