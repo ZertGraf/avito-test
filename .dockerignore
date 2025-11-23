@@ -1,0 +1,48 @@
+# git
+.git
+.gitignore
+.gitattributes
+
+# ide
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+coverage.out
+coverage.html
+
+# dependencies
+vendor/
+
+# test files
+*_test.go
+testdata/
+
+# documentation
+*.md
+!README.md
+docs/
+
+# docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# ci/cd
+.github
+.gitlab-ci.yml
+
+# misc
+.env.local
+.env.*.local
+*.log
+tmp/
+temp/

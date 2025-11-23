@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pr-reviewer-db
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pr-reviewer-service
+    environment:
+      # application
+      ENVIRONMENT: production
+      SERVICE_NAME: pr-reviewer-service
+
+      # database
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_NAME: postgres
+      DATABASE_SCHEMA: public
+      DATABASE_SSL_MODE: disable
+
+      # connection pool
+      DATABASE_MAX_CONNS: 25
+      DATABASE_MIN_CONNS: 5
+      DATABASE_MAX_CONN_LIFETIME: 1h
+      DATABASE_MAX_CONN_IDLE_TIME: 30m
+      DATABASE_HEALTH_CHECK_PERIOD: 1m
+      DATABASE_CONNECT_TIMEOUT: 30s
+      DATABASE_ACQUIRE_TIMEOUT: 10s
+
+      # migrations
+      DATABASE_MIGRATION_ENABLED: "true"
+      DATABASE_MIGRATION_TIMEOUT: 5m
+      DATABASE_MIGRATION_TABLE: schema_version
+
+      # server
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
+      SERVER_READ_TIMEOUT: 30s
+      SERVER_WRITE_TIMEOUT: 30s
+      SERVER_IDLE_TIMEOUT: 60s
+
+      # logging
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+      LOG_ADD_SOURCE: "false"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
